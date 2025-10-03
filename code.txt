@@ -1,0 +1,363 @@
+/*
+    DONE fix list with new station ID
+    TODO wrap all functions as int and return codes 
+    TODO move structs into correct h files
+    TODO show displayed minutes for depture too 
+*/
+#include "user.h"
+#include "http.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char* argv[]) {
+
+    user_data_t ud = {0};
+
+    if (user_input_validate(argv, argc, &ud) != STATUS_OK) {
+        printf("Validation failed.\n");
+        return STATUS_EXIT;
+    }
+
+    if (strlen(ud.url) == 0) {
+        printf("URL not set\n");
+        return STATUS_EXIT;
+    }
+    
+
+    char* http_response = http_get(&ud);
+    if (http_response) {
+        http_metro_departures(http_response);
+        free(http_response);
+    } else {
+        fprintf(stderr, "Failed to get departures\n");
+    }
+    
+    /*free(http_response);*/
+    
+    return STATUS_OK;
+}#include "user.h"
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+#define N_STATIONS 101
+
+/* to do fix list */
+user_station_t s[N_STATIONS] = {
+    {9110, "Abrahamsberg"},
+    {9300, "Akalla"},
+    {9282, "Alby"},
+    {9112, "Alvik"},
+    {9293, "Aspudden"},
+    {9291, "Axelsberg"},
+    {9141, "Bagarmossen"},
+    {9163, "Bandhagen"},
+    {9202, "Bergshamra"},
+    {9143, "Björkhagen"},
+    {9105, "Blackeberg"},
+    {9187, "Blåsut"},
+    {9289, "Bredäng"},
+    {9109, "Brommaplan"},
+    {9201, "Danderyds sjukhus"},
+    {9324, "Duvbo"},
+    {9167, "Enskede gård"},
+    {9181, "Farsta"},
+    {9180, "Farsta strand"},
+    {9283, "Fittja"},
+    {9115, "Fridhemsplan"},
+    {9260, "Fruängen"},
+    {9193, "Gamla stan"},
+    {9221, "Gärdet"},
+    {9168, "Globen"},
+    {9183, "Gubbängen"},
+    {9189, "Gullmarsplan"},
+    {9160, "Hagsätra"},
+    {9262, "Hägerstensåsen"},
+    {9309, "Hallonbergen"},
+    {9281, "Hallunda"},//7385
+    {9144, "Hammarbyhöjden"},
+    {9320, "Hjulsta"},
+    {9295, "Hornstull"},
+    {9327, "Huvudsta"},
+    {9301, "Husby"},
+    {9101, "Hässelby gård"},
+    {9100, "Hässelby strand"},
+    {9162, "Högdalen"},
+    {9182, "Hökarängen"}, //9179
+    {9119, "Hötorget"},
+    {9106, "Islandstorget"},
+    {9102, "Johannelund"},
+    {9222, "Karlaplan"},
+    {9302, "Kista"},
+    {9113, "Kristineberg"},
+    {9340, "Kungsträdgården"},
+    {9142, "Kärrtorp"},
+    {9294, "Liljeholmen"},
+    {9297, "Mariatorget"},
+    {9284, "Masmo"},
+    {9191, "Medborgarplatsen"},
+    {9264, "Midsommarkransen"},
+    {9200, "Mörby centrum"},
+    {9290, "Mälarhöjden"},
+    {9304, "Näckrosen"},
+    {9280, "Norsborg"},
+    {9117, "Odenplan"},
+    {9104, "Råcksta"},
+    {9181, "Rådhuset"},
+    {9309, "Rådmansgatan"},
+    {9161, "Rågsved"},
+    {9322, "Rinkeby"},
+    {9323, "Rissne"},
+    {9220, "Ropsten"},
+    {9186, "Sandsborg"},
+    {9116, "Sankt Eriksplan"},
+    {9288, "Sätra"},
+    {9190, "Skanstull"},
+    {9140, "Skarpnäck"},
+    {9287, "Skärholmen"},
+    {9188, "Skärmarbrink"},
+    {9185, "Skogskyrkogården"},
+    {9192, "Slussen"},
+    {9166, "Sockenplan"},
+    {9305, "Solna centrum"},
+    {9326, "Solna strand"},
+    {9307, "Stadshagen"},
+    {9205, "Stadion"},
+    {9111, "Stora Mossen"},
+    {9164, "Stureby"},
+    {9325, "Sundbyberg"},
+    {9165, "Svedmyra"},
+    {9001, "T-Centralen"},
+    {9184, "Tallkrogen"},
+    {9204, "Tekniska högskolan"},
+    {9263, "Telefonplan"},
+    {9321, "Tensta"},
+    {9114, "Thorildsplan"},
+    {9203, "Universitetet"},
+    {9103, "Vällingby"},
+    {9286, "Vårberg"},
+    {9285, "Vårby gård"},
+    {9261, "Västertorp"},
+    {9306, "Västra skogen"},
+    {9296, "Zinkensdamm"},
+    {9108, "Åkeshov"},
+    {9107, "Ängbyplan"},
+    {9292, "Örnsberg"},
+    {9206, "Östermalmstorg"}
+};
+
+int user_input_validate(char* argv[], int argc, user_data_t* self) {
+
+    if (argc <= 1) {
+        printf("%s <station name>\n", argv[0]);
+        return STATUS_EXIT;
+    }
+
+    // Validate input contains no digits
+    for (int i = 1; i < argc; i++) {
+        for (char* ptr = argv[i]; *ptr != '\0'; ptr++) {
+            if (isdigit((unsigned char)*ptr)) {
+                printf("Invalid input in %s, contains digit!\n", argv[i]);
+                return STATUS_FAIL;
+            }
+        }
+    }
+
+    // Calculate total length needed for station name
+    size_t len_station_name = 0;
+    for (int i = 1; i < argc; i++) {
+        len_station_name += strlen(argv[i]);
+    }
+    len_station_name += argc;
+
+    // Allocate memory for concatenated station name
+    char* user_station = (char*)malloc(len_station_name);
+    if (!user_station) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return STATUS_EXIT;
+    }
+
+    // Concatenate all arguments into one station name
+    strcpy(user_station, argv[1]);
+    if (argc > 2) {
+        for (int i = 2; i < argc; i++) {
+            strcat(user_station, " ");
+            strcat(user_station, argv[i]);
+        }
+    }
+
+    // Search for station in list
+    unsigned station_id = 0;
+    int found = 0;
+    for (int i = 0; i < N_STATIONS; i++) {
+        user_station_t* us = &s[i];
+        if (strcmp(user_station, us->name) == 0) {
+            station_id = us->id;
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Station %s not found! Please check spelling.\n", user_station);
+        free(user_station);
+        user_station = NULL;
+        return STATUS_FAIL;
+    }
+
+    // Build URL with station ID
+    snprintf(self->url, MAX_URL_SIZE, 
+             "https://transport.integration.sl.se/v1/sites/%u/departures", 
+             station_id);
+
+    free(user_station);
+    user_station = NULL;
+
+    return STATUS_OK;
+}#include "http.h"
+#include "user.h"
+#include <curl/curl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "cJSON.h"
+
+char* http_get(user_data_t* ud) {
+    
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        fprintf(stderr, "Curl returned NULL\n");
+        return NULL;
+    }
+
+    http_membuf_t chunk = {0};
+
+    curl_easy_setopt(curl, CURLOPT_URL, ud->url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_write_data);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&chunk);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        fprintf(stderr, "Curl perform failed: %s\n", curl_easy_strerror(res));
+        curl_easy_cleanup(curl);
+        /*if (chunk.data) {
+            free(chunk.data);
+        }*/
+        return NULL;
+    }
+
+    curl_easy_cleanup(curl);
+
+    return chunk.data;
+}
+
+size_t http_write_data(void *buffer, size_t size, size_t nmemb, void *userp) {
+    size_t bytes = size * nmemb;
+    printf("Received chunk: %zu bytes\n", bytes);
+
+    http_membuf_t* mem_t = (http_membuf_t*)userp;
+    
+    // Realloc to grow buffer (add 1 for null terminator)
+    char *ptr = (char*)realloc(mem_t->data, mem_t->size + bytes + 1);
+    if (!ptr) {
+        fprintf(stderr, "Realloc failed in http_write_data\n");
+        return 0; // Tell curl to abort
+    }
+    
+    mem_t->data = ptr;
+    memcpy(mem_t->data + mem_t->size, buffer, bytes);
+    mem_t->size += bytes;
+    mem_t->data[mem_t->size] = '\0';
+    
+    return bytes;
+}
+
+void http_metro_departures(const char* http_response) {
+    if (!http_response) {
+        fprintf(stderr, "No HTTP response provided\n");
+        return;
+    }
+
+    // Correct variable used here
+    cJSON* root = cJSON_Parse(http_response);
+    if (!root) {
+        fprintf(stderr, "Error parsing JSON\n");
+        return;
+    }
+
+    cJSON* departures = cJSON_GetObjectItem(root, "departures");
+    if (!departures) {
+        fprintf(stderr, "No departures found\n");
+        cJSON_Delete(root);
+        return;
+    }
+
+    int dep_count = cJSON_GetArraySize(departures);
+
+    for (int i = 0; i < dep_count; i++) {
+        cJSON* dep = cJSON_GetArrayItem(departures, i);
+        cJSON* line = cJSON_GetObjectItem(dep, "line");
+        if (!line) continue;
+
+        cJSON* transport_mode = cJSON_GetObjectItem(line, "transport_mode");
+        if (!transport_mode || strcmp(transport_mode->valuestring, "METRO") != 0) continue;
+
+        cJSON* scheduled = cJSON_GetObjectItem(dep, "scheduled");
+        cJSON* expected = cJSON_GetObjectItem(dep, "expected");
+        cJSON* designation = cJSON_GetObjectItem(line, "designation");
+        cJSON* destination = cJSON_GetObjectItem(dep, "destination");
+        cJSON* display = cJSON_GetObjectItem(dep, "display");
+
+        printf("Line: %s\n", designation ? designation->valuestring : "N/A");
+        printf("Destination: %s\n", destination ? destination->valuestring : "N/A");
+        printf("Scheduled: %s || Arriving in: %s\n", scheduled ? scheduled->valuestring : "N/A", display ? display->valuestring : "N/A");
+        printf("Expected:  %s\n\n", expected ? expected->valuestring : "N/A");
+    }
+
+    cJSON_Delete(root);
+}
+#ifndef __HTTP_H_
+#define __HTTP_H_
+#include <stddef.h>
+
+#define MAX_URL_SIZE 512
+
+typedef enum {
+    STATUS_OK,
+    STATUS_FAIL,
+    STATUS_EXIT
+} status_code_e;
+
+typedef struct {
+    char* data;
+    size_t size;
+} http_membuf_t;
+
+size_t http_write_data(void* buf, size_t size, size_t nmemb, void* userp);
+char* http_get(user_data_t* ud);
+void http_metro_departures(const char* http_response);
+
+#endif /* __HTTP_H_ */#ifndef __USER_H
+#define __USER_H_
+#include "http.h"
+
+#define MAX_SIZE_STATION 512
+
+typedef struct {
+    unsigned id;
+    char* name;
+} user_station_t;
+
+extern user_station_t s[];
+
+typedef struct {
+    char url[MAX_URL_SIZE];
+} user_data_t;
+
+/* public api */
+int user_input_validate(char* argv[], int argc, user_data_t* self);
+
+#endif /* __INPUT_H_ */
