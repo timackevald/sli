@@ -4,7 +4,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-#define N_STATIONS 101
+#define N_STATIONS 100
 
 /* to do fix list */
 user_station_t s[N_STATIONS] = {
@@ -153,7 +153,6 @@ int user_input_validate(char* argv[], int argc, user_data_t* self) {
     }
 
     // 4. Concatenate arguments into one station name (excluding the filter)
-    
     // Calculate total length needed for station name
     size_t len_station_name = 0;
     for (int i = 1; i < station_name_argc; i++) {
