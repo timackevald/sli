@@ -79,7 +79,7 @@ void http_metro_departures(const char* http_response, user_data_t* ud) {
     }
 
     int dep_count = cJSON_GetArraySize(departures);
-    for (int i = 0; i < dep_count; i++) {
+    for (int i = dep_count; i >= 0; i--) {
         cJSON* dep = cJSON_GetArrayItem(departures, i);
         cJSON* line = cJSON_GetObjectItem(dep, "line");
         if (!line) continue;
@@ -122,14 +122,20 @@ void http_metro_departures(const char* http_response, user_data_t* ud) {
         cJSON* destination = cJSON_GetObjectItem(dep, "destination");
         cJSON* display = cJSON_GetObjectItem(dep, "display"); // This is the minutes to arrival
 
-        printf("Line: %s\n", line_designation ? line_designation : "N/A");
-        printf("Destination: %s\n", destination ? destination->valuestring : "N/A");
+        char time_s[9];
+        char time_e[9];
+        sscanf(scheduled->valuestring, "%*10cT%8c", time_s);
+        sscanf(expected->valuestring, "%*10cT%8c", time_e);
+        time_s[8] = '\0';
+        time_e[8] = '\0';
+
+        printf("Line %s: %s\n", line_designation ? line_designation : "N/A", destination ? destination->valuestring : "N/A");
         
         // Show the requested "displayed minutes" for departure
         printf("Arriving in: %s minutes\n", display ? display->valuestring : "N/A");
         
-        printf("Scheduled: %s\n", scheduled ? scheduled->valuestring : "N/A");
-        printf("Expected:  %s\n\n", expected ? expected->valuestring : "N/A");
+        printf("Scheduled: %s\n", time_s);
+        printf("Expected:  %s\n\n", time_e);
     }
 
     cJSON_Delete(root);
